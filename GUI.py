@@ -1,12 +1,16 @@
 from Tkinter import *
 from Game import Game
-
+from SettingsGUI import SettingsGUI
 class GUI(object):
-  def __init__ (self, game):
+
+  def __init__ (self, settings, game):
+    self.settings = settings
     self.game = game
+    self.game.addListener(self)
     self.root = Tk()
     self.root.withdraw()
     self.window = Toplevel(self.root)
+    self.cause = None
     self.window.title("Minesweeper")
     self.window.protocol("WM_DELETE_WINDOW", self.cleanup)
     
@@ -24,34 +28,33 @@ class GUI(object):
     self.minesLeft = Label(self.window, text=str(self.game.num_mines))
     self.minesLeft.grid(row=self.game.m, column=self.game.n-1)
     
-    self.update()
-  
+    menu = Menu(self.window)
+    self.window.config(menu=menu)
+    filemenu = Menu(menu)
+    menu.add_cascade(label="File", menu=filemenu)
+    
+    filemenu.add_command(label="New Game", command=self.restart)
+    filemenu.add_command(label="Options", command=self.doOptions)
+    filemenu.add_command(label="Exit", command=self.exit)
+    
+    self.tick()
+    
   def start(self):
     self.root.mainloop()
-    
+    return self.cause
   
   def getClick(self, i, j):
-    def f(*args):
+    def f(event=None):
       self.game.click(i, j)
-      self.update()
-      if self.timerId is None:
-        self.tick()
     return f
   def getRightClick(self, i, j):
-    def f(*args):
-      print args
+    def f(event):
       self.game.rightClick(i,j)
-      self.update()
-      if self.timerId is None:
-        self.tick()
     return f
   
   def tick(self):
-    if not self.game.isPlaying(): return
-    self.game.time += 1
-    self.update()
-    if self.game.time < 999:
-      self.timerId = self.timer.after(1000, self.tick)
+    self.game.tick()
+    self.timerId = self.timer.after(1000, self.tick)
   
   def stopGame(self):
     if self.timerId is not None:
@@ -77,7 +80,31 @@ class GUI(object):
     self.minesLeft.config(text="%03d" % (self.game.num_mines - self.game.num_flagged))
     if not self.game.isPlaying():
       self.stopGame()
+  
+  def exit(self):
+    if self.game.isPlaying():
+      self.game.lose()
+    self.cleanup()
+  
+  def restart(self):
+    if self.game.isPlaying():
+      self.game.lose()
+    self.cause = "RESTART"
+    self.cleanup()
+  
+  def doOptions(self):
+    self.optwindow = SettingsGUI(self.settings, self.root, self.receiveOpts)
     
+    
+  def receiveOpts(self):
+    if not self.optwindow.cancelled:
+      self.cause = "OPTIONS"
+      if self.game.isPlaying():
+        self.game.lose()
+      self.cleanup()
+    else:
+      print "CANCELLED"
+      
   def cleanup(self):
     self.root.destroy()
     self.stopGame()

@@ -1,40 +1,50 @@
-import Game
-import GUI
+from Game import Game, BeginnerGame, IntermediateGame, AdvancedGame
+from GUI import GUI
+from Settings import Settings
+from SettingsGUI import SettingsGUI
+import sys
 
 import Tkinter
 
-BEGINNER = "BEGINNER"
-INTERMEDIATE = "INTERMEDIATE"
-HARD = "HARD"
 
-game_by_mode = {HARD: Game.HardGame, BEGINNER: Game.BeginnerGame, INTERMEDIATE: Game.IntermediateGame}
+
+
+game_by_mode = {Game.Mode.ADVANCED: AdvancedGame, Game.Mode.BEGINNER: BeginnerGame, Game.Mode.INTERMEDIATE: IntermediateGame}
 
 class Minesweeper(object):
   def __init__ (self, *args):
-    self.game = Minesweeper.getGame(*args)
-    self.gui = GUI.GUI(self.game)
+    self.settings = Settings()
+    self.game = self.getGame()
+    
+    self.gui = GUI(self.settings, self.game)
   
-  @staticmethod
-  def getGame(*args):
-    if len(args) < 1:
-      raise ValueError("need at least one argument for Minesweeper")
-    if args[0] in game_by_mode:
-      if len(args) != 1:
-        raise ValueError("expected 1 argument, got {0}".format(len(args)))
-      return game_by_mode[args[0]]()
-    if len(args) != 3:
-      raise ValueError("expected 3 arguments for Custom Game, got {0}".format(len(args)))
-    return Game.Game(*args)
+  def getGame(self):
+    mode = self.settings['MODE']
+    if mode in game_by_mode:
+      return game_by_mode[mode](self.settings)
+    elif mode is None:
+      gui = SettingsGUI(self.settings)
+      if gui.cancelled:
+        sys.exit(0)
+      return self.getGame()
+    elif not isinstance(mode, tuple) or len(mode) != 3:
+      raise ValueError("expected 3-tuple for Custom Game, got {0}".format(mode))
+    return Game(self.settings,*mode)
   
   def run(self):
-    self.gui.start()
+    return self.gui.start()
   
-  def restart (self, *args):
-    self.game = Minesweeper.getGame(*args)
-    self.gui = GUI.GUI(self.game)
+  def restart (self):
+    self.game = self.getGame()
+    self.gui = GUI(self.settings, self.game)
 
- 
- 
-if __name__ == "__main__":
-  m = Minesweeper(HARD)
-  m.run()
+
+def main():
+  m = Minesweeper()
+  while True:
+    result = m.run()
+    if result is None: break
+    m.restart()
+  
+if __name__ == '__main__':
+  main()

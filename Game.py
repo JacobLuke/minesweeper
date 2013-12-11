@@ -1,18 +1,18 @@
 import random
 
+def enum(*sequential, **named):
+  enums = dict(zip(sequential, range(len(sequential))), **named)
+  return type('Enum', (), enums)
+
 class Game(object):
-  class FlagType(object):pass
+  Flag = enum('NULL', 'MINE', 'QUESTION')
   
-  NULL_FLAG = FlagType()
-  MINE_FLAG = FlagType()
-  Q_FLAG = FlagType()
+  State = enum('WAITING', 'PLAYING', 'WON', 'LOST')
   
-  class State(object):pass
+  Mode = enum('BEGINNER', 'INTERMEDIATE', "ADVANCED", CUSTOM=-1)
   
-  WAITING = State()
-  PLAYING = State()
-  WON = State()
-  LOST = State()
+  
+  
   
   class Square(object):
     UNCLICKED = "#"
@@ -26,7 +26,7 @@ class Game(object):
       self.j = j
       self.isMine = False
       self.isClicked = False
-      self.flag = Game.NULL_FLAG
+      self.flag = Game.Flag.NULL
       self.adj = 0
       
     def getChar(self):
@@ -37,14 +37,15 @@ class Game(object):
           return Game.Square.EMPTY
         else:
           return str(self.adj)
-      elif self.flag is Game.NULL_FLAG:
+      elif self.flag is Game.Flag.NULL:
         return Game.Square.UNCLICKED
-      elif self.flag is Game.MINE_FLAG:
+      elif self.flag is Game.Flag.MINE:
         return Game.Square.FLAG
       else:
         return Game.Square.QUESTION      
 
-  def __init__ (self, m, n, num_mines):
+  def __init__ (self, settings, m, n, num_mines):
+    self.settings = settings
     self.m = m
     self.n = n
     self.time = 0
@@ -52,10 +53,13 @@ class Game(object):
     self.num_flagged = 0
     self.remaining = m * n - num_mines
     self.squares = {(i,j):Game.Square(i,j) for i in range(m) for j in range(n)}
-    self.state = Game.WAITING
-    
-    self.printGrid()
-    
+    self.state = Game.State.WAITING
+    self.listeners = set()
+    #self.printGrid()
+  
+  def addListener(self, obj):
+    self.listeners.add(obj)
+  
   def printGrid(self):
     print '\n'.join(''.join(line) for line in self.getSquares())
     
@@ -70,25 +74,27 @@ class Game(object):
   
   def click(self, i, j):
     self._click(i, j)
-    self.printGrid()
+    self.notify()
     
   def _click (self, i, j):
     if i < 0 or j < 0 or i >= self.m or j >= self.n: return
     square = self.squares[(i,j)]
-    if square.isClicked or square.flag == Game.MINE_FLAG: return
+    if square.isClicked or square.flag == Game.Flag.MINE: return
     
-    if self.state is Game.WAITING:
-      self.state = Game.PLAYING
+    if self.state is Game.State.WAITING:
+      self.state = Game.State.PLAYING
       lSquares = list(self.squares.keys())
       for sq in self.getAdj(i, j):
         lSquares.remove((sq.i, sq.j))
+      lSquares.remove((i,j))
+      
       random.shuffle(lSquares)
       mines = lSquares[:self.num_mines]
       for mine in mines:
         self.squares[mine].isMine = True
         for adj in self.getAdj(*mine):
           adj.adj += 1
-    if self.state is Game.PLAYING:
+    if self.state is Game.State.PLAYING:
       square = self.squares[(i, j)]
       square.isClicked = True
       if square.isMine:
@@ -100,19 +106,32 @@ class Game(object):
         elif square.adj == 0:
           for adj in self.getAdj(i, j):
             self._click(adj.i, adj.j)
-  
+ 
   def win(self):
-    self.state = Game.WON
+    self.state = Game.State.WON
+    self.settings.winGame()
+    self.notify()
     print "GAME WON"
-    
+  
+  def tick(self):
+    if self.isPlaying():
+      self.time += 1
+      self.notify()
+      
+  def notify(self):
+    for listener in self.listeners:
+      listener.update()
+  
   def lose(self):
     for square in self.squares.values():
       square.isClicked = True
       square.adj = 0
-    self.state = Game.LOST
+    self.state = Game.State.LOST
+    self.notify()
+    self.settings.loseGame()
     
   def isPlaying(self):
-    return self.state is Game.PLAYING  
+    return self.state is Game.State.PLAYING  
   
   def getAdj(self, i, j):
     for x in (i-1, i, i+1):
@@ -128,7 +147,7 @@ class Game(object):
       flagged = set()
       unflagged = set()
       for adj_square in self.getAdj(i,j):    
-        if adj_square.flag == Game.MINE_FLAG:
+        if adj_square.flag == Game.Flag.MINE:
           flagged.add(adj_square)
         else:
           unflagged.add(adj_square)
@@ -138,24 +157,25 @@ class Game(object):
       else:
         print len(flagged), "are flagged, expected", square.adj
     else:
-      if square.flag == Game.NULL_FLAG:
-        square.flag = Game.MINE_FLAG
+      if square.flag == Game.Flag.NULL:
+        square.flag = Game.Flag.MINE
         self.num_flagged += 1
-      elif square.flag == Game.MINE_FLAG:
-        square.flag = Game.Q_FLAG
+      elif square.flag == Game.Flag.MINE:
+        square.flag = Game.Flag.QUESTION
         self.num_flagged -= 1
       else:
-        square.flag = Game.NULL_FLAG
-    self.printGrid()
+        square.flag = Game.Flag.NULL
+    self.notify()
+    
 class BeginnerGame(Game):
-  def __init__(self):
-    super(BeginnerGame, self).__init__(9,9,10)
+  def __init__(self, settings):
+    super(BeginnerGame, self).__init__(settings, 9,9,10)
 
 class IntermediateGame(Game):
-  def __init__(self):
-    super(IntermediateGame, self).__init__(16,16,40)
+  def __init__(self, settings):
+    super(IntermediateGame, self).__init__(settings, 16,16,40)
 
-class HardGame(Game):
-  def __init__ (self):
-    super(HardGame, self).__init__(16, 30, 99)
+class AdvancedGame(Game):
+  def __init__ (self, settings):
+    super(AdvancedGame, self).__init__(settings, 16, 30, 99)
     

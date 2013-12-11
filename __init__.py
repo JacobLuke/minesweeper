@@ -1,1 +1,1 @@
-from Main import Minesweeper, BEGINNER, INTERMEDIATE, HARD
+from Main import Minesweeper
