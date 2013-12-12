@@ -31,12 +31,24 @@ class Settings(object):
     self.save()
   
   def winGame(self):
-    self.dict['WINS'] += 1
-    self['GAMES'] += 1
+    mode = self.dict['MODE']
+    stats = self.dict['STATS']
+    if mode not in stats:
+      stats[mode] = {'WINS':0, 'GAMES':0}
+    stats[mode]['WINS'] += 1
+    stats[mode]['GAMES'] += 1
+    self.save()
+    
     
   def loseGame(self):
-    self['GAMES'] += 1
+    mode = self.dict['MODE']
+    stats = self.dict['STATS']
+    if mode not in stats:
+      stats[mode] = {'WINS':0, 'GAMES':0}
+    stats[mode]['GAMES'] += 1
+    
+    self.save()
   
   
   def default(self):
-    return {'MODE':None, 'WINS':0, 'GAMES':0}
+    return {'MODE':None, 'STATS':{}}
